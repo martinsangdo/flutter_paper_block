@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/levels.dart';
+import '../route_observer.dart';
 import 'game_screen.dart';
 
 class LevelSelectScreen extends StatefulWidget {
@@ -10,8 +11,9 @@ class LevelSelectScreen extends StatefulWidget {
   State<LevelSelectScreen> createState() => _LevelSelectScreenState();
 }
 
-class _LevelSelectScreenState extends State<LevelSelectScreen> {
+class _LevelSelectScreenState extends State<LevelSelectScreen> with RouteAware {
   int _unlockedCount = 1;
+  Set<int> _completed = <int>{};
 
   @override
   void initState() {
@@ -19,10 +21,31 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
     _loadProgress();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) routeObserver.subscribe(this, route);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  // Called when a route pushed above this one (gameplay) is popped and the
+  // level list becomes visible again — refresh unlock/completion state so
+  // newly unlocked levels show immediately.
+  @override
+  void didPopNext() => _loadProgress();
+
   Future<void> _loadProgress() async {
     final prefs = await SharedPreferences.getInstance();
+    final done = prefs.getStringList('completed') ?? <String>[];
     setState(() {
       _unlockedCount = prefs.getInt('unlocked') ?? 1;
+      _completed = done.map(int.parse).toSet();
     });
   }
 
@@ -59,9 +82,11 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
           itemBuilder: (context, i) {
             final level = allLevels[i];
             final unlocked = level.id <= _unlockedCount;
+            final completed = _completed.contains(level.id);
             return _LevelTile(
               level: level,
               unlocked: unlocked,
+              completed: completed,
               onTap: unlocked
                   ? () async {
                       await Navigator.push(
@@ -84,16 +109,36 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
 class _LevelTile extends StatelessWidget {
   final dynamic level;
   final bool unlocked;
+  final bool completed;
   final VoidCallback? onTap;
 
   const _LevelTile({
     required this.level,
     required this.unlocked,
+    required this.completed,
     this.onTap,
   });
 
+  static const Color _locked = Color(0xFFBBB0A0);
+  static const Color _coral = Color(0xFFE85D75);
+  static const Color _green = Color(0xFF5DC48F);
+
   @override
   Widget build(BuildContext context) {
+    // Accent drives border, icon and shadow: green = completed, coral =
+    // unlocked-not-done, muted = locked.
+    final Color accent = !unlocked
+        ? _locked
+        : completed
+            ? _green
+            : _coral;
+
+    final IconData icon = !unlocked
+        ? Icons.lock
+        : completed
+            ? Icons.check_circle
+            : Icons.crop_square;
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -101,16 +146,11 @@ class _LevelTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: unlocked ? const Color(0xFFEDE5D5) : const Color(0xFFDDD5C5),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: unlocked
-                ? const Color(0xFFE85D75)
-                : const Color(0xFFBBB0A0),
-            width: 2,
-          ),
+          border: Border.all(color: accent, width: 2),
           boxShadow: unlocked
               ? [
                   BoxShadow(
-                    color: const Color(0xFFE85D75).withValues(alpha: 0.2),
+                    color: accent.withValues(alpha: 0.2),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   )
@@ -120,13 +160,7 @@ class _LevelTile extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              unlocked ? Icons.crop_square : Icons.lock,
-              color: unlocked
-                  ? const Color(0xFFE85D75)
-                  : const Color(0xFFBBB0A0),
-              size: 20,
-            ),
+            Icon(icon, color: accent, size: 20),
             const SizedBox(height: 4),
             Text(
               '${level.id}',

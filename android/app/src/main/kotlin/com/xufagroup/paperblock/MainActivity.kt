@@ -1,4 +1,4 @@
-package com.paperblock.paper_block_game
+package com.xufagroup.paperblock
 
 import io.flutter.embedding.android.FlutterActivity
 

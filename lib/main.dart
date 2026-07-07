@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'screens/main_menu_screen.dart';
-import 'services/ad_service.dart';
+import 'route_observer.dart';
+import 'screens/splash_screen.dart';
+import 'services/sound_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AdService.instance.initialize();
+  await SoundService.instance.load();
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -23,7 +24,7 @@ class PaperBlockApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Paper Block',
+      title: 'Paper Blocks',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: const ColorScheme.light(
@@ -33,7 +34,8 @@ class PaperBlockApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF5F0E8),
         useMaterial3: true,
       ),
-      home: const MainMenuScreen(),
+      navigatorObservers: [routeObserver],
+      home: const SplashScreen(),
     );
   }
 }

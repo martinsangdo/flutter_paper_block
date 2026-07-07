@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/levels.dart';
 import '../models/game_state.dart';
 import '../models/piece.dart';
-import '../services/ad_service.dart';
+import '../services/sound_service.dart';
+import '../widgets/banner_ad_placeholder.dart';
 import '../widgets/game_board_widget.dart';
+import '../widgets/hint_button.dart';
 import '../widgets/piece_tray_widget.dart';
 
 class GameScreen extends StatefulWidget {
@@ -52,6 +53,8 @@ class _GameScreenState extends State<GameScreen>
   void _onStateChange() {
     if (_gameState.isComplete && !_showComplete) {
       _unlockNext();
+      _markCompleted();
+      SoundService.instance.playComplete();
       setState(() => _showComplete = true);
       _completeController.forward();
     }
@@ -69,6 +72,21 @@ class _GameScreenState extends State<GameScreen>
     if (nextId > current && nextId <= allLevels.length) {
       await prefs.setInt('unlocked', nextId);
     }
+  }
+
+  Future<void> _markCompleted() async {
+    final prefs = await SharedPreferences.getInstance();
+    final done = prefs.getStringList('completed') ?? <String>[];
+    final id = allLevels[widget.levelIndex].id.toString();
+    if (!done.contains(id)) {
+      done.add(id);
+      await prefs.setStringList('completed', done);
+    }
+  }
+
+  void _undo() {
+    _gameState.undo();
+    SoundService.instance.playPickup();
   }
 
   void _reset() {
@@ -112,10 +130,7 @@ class _GameScreenState extends State<GameScreen>
                   child: _buildBoardArea(cellSize),
                 ),
                 _buildTray(cellSize),
-                ListenableBuilder(
-                  listenable: AdService.instance,
-                  builder: (context, _) => _buildBanner(),
-                ),
+                const BannerAdPlaceholder(),
               ],
             );
           },
@@ -158,25 +173,35 @@ class _GameScreenState extends State<GameScreen>
               ],
             ),
           ),
+          const HintButton(),
           ListenableBuilder(
-            listenable: AdService.instance,
+            listenable: _gameState,
             builder: (context, _) => IconButton(
-              icon: Icon(
-                Icons.lightbulb_outline,
-                color: AdService.instance.isRewardedLoaded
-                    ? const Color(0xFFE85D75)
-                    : const Color(0xFFCCBBAA),
-              ),
-              onPressed: AdService.instance.isRewardedLoaded
-                  ? _showRewardedHint
-                  : null,
-              tooltip: 'Hint (watch ad)',
+              icon: const Icon(Icons.undo),
+              color: const Color(0xFF8B7355),
+              disabledColor: const Color(0xFF8B7355).withValues(alpha: 0.3),
+              onPressed: _gameState.canUndo ? _undo : null,
+              tooltip: 'Undo',
             ),
           ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Color(0xFF8B7355)),
             onPressed: _reset,
             tooltip: 'Reset',
+          ),
+          ListenableBuilder(
+            listenable: SoundService.instance,
+            builder: (context, _) => IconButton(
+              icon: Icon(
+                SoundService.instance.enabled
+                    ? Icons.volume_up
+                    : Icons.volume_off,
+                color: const Color(0xFF8B7355),
+              ),
+              onPressed: SoundService.instance.toggle,
+              tooltip:
+                  SoundService.instance.enabled ? 'Sound: on' : 'Sound: off',
+            ),
           ),
         ],
       ),
@@ -210,8 +235,14 @@ class _GameScreenState extends State<GameScreen>
             },
             onLeave: (_) => _getBoardWidget()?.clearGhost(),
             onAcceptWithDetails: (details) {
-              _getBoardWidget()
-                  ?.tryPlace(details.data, _globalToLocal(details.offset));
+              final placed = _getBoardWidget()?.tryPlace(
+                      details.data, _globalToLocal(details.offset)) ??
+                  false;
+              if (placed) {
+                SoundService.instance.playPlace();
+              } else {
+                SoundService.instance.playInvalid();
+              }
             },
             builder: (context, candidateData, rejectedData) {
               return SizedBox(
@@ -246,35 +277,6 @@ class _GameScreenState extends State<GameScreen>
           pieces: _gameState.remainingPieces,
           cellSize: cellSize,
         ),
-      ),
-    );
-  }
-
-  void _showRewardedHint() {
-    AdService.instance.showRewarded(
-      onRewarded: () {
-        if (!mounted) return;
-        final remaining = _gameState.remainingPieces;
-        if (remaining.isEmpty) return;
-        final hint = remaining.first;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Hint: try placing the ${hint.color} piece first!'),
-          duration: const Duration(seconds: 3),
-          backgroundColor: const Color(0xFF5B8AD4),
-        ));
-      },
-    );
-  }
-
-  Widget _buildBanner() {
-    final banner = AdService.instance.bannerAd;
-    if (banner == null) return const SizedBox.shrink();
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        width: banner.size.width.toDouble(),
-        height: banner.size.height.toDouble(),
-        child: AdWidget(ad: banner),
       ),
     );
   }

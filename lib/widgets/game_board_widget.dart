@@ -23,14 +23,22 @@ class GameBoardWidgetState extends State<GameBoardWidget> {
   int _ghostRow = 0;
   bool _ghostValid = false;
 
+  /// Converts the drop position to the piece's top-left origin cell. With the
+  /// tray's default `childDragAnchorStrategy`, [localPos] is already the piece's
+  /// top-left corner in board-local coords, so we just snap it to the grid.
+  (int, int) _originFor(Piece piece, Offset localPos) {
+    final cs = widget.cellSize;
+    final col = (localPos.dx / cs).round();
+    final row = (localPos.dy / cs).round();
+    return (col, row);
+  }
+
   void updateGhost(Piece? piece, Offset localPos) {
     if (piece == null) {
       setState(() => _ghostPiece = null);
       return;
     }
-    // feedbackOffset already shifted details.offset by -w/2,-h/2 so pointer == top-left of piece
-    final col = (localPos.dx / widget.cellSize).round();
-    final row = (localPos.dy / widget.cellSize).round();
+    final (col, row) = _originFor(piece, localPos);
     final valid = widget.gameState.canPlace(piece, col, row);
     setState(() {
       _ghostPiece = piece;
@@ -43,8 +51,7 @@ class GameBoardWidgetState extends State<GameBoardWidget> {
   void clearGhost() => setState(() => _ghostPiece = null);
 
   bool tryPlace(Piece piece, Offset localPos) {
-    final col = (localPos.dx / widget.cellSize).round();
-    final row = (localPos.dy / widget.cellSize).round();
+    final (col, row) = _originFor(piece, localPos);
     if (widget.gameState.canPlace(piece, col, row)) {
       widget.gameState.placePiece(piece, col, row);
       setState(() => _ghostPiece = null);

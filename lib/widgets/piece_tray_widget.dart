@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/piece.dart';
 import '../painters/piece_painter.dart';
+import '../services/sound_service.dart';
 
 class PieceTrayWidget extends StatelessWidget {
   final List<Piece> pieces;
@@ -38,18 +39,26 @@ class PieceTrayWidget extends StatelessWidget {
                 ),
               ),
             )
-          : SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: pieces
-                    .map((p) => Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 12),
-                          child: _DraggablePiece(
-                              piece: p, cellSize: cellSize),
-                        ))
-                    .toList(),
+          : LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                // Keep the row at least as wide as the tray so a small number
+                // of pieces stays centred, while more pieces overflow and scroll.
+                child: ConstrainedBox(
+                  constraints:
+                      BoxConstraints(minWidth: constraints.maxWidth),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: pieces
+                        .map((p) => Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12),
+                              child: _DraggablePiece(
+                                  piece: p, cellSize: cellSize),
+                            ))
+                        .toList(),
+                  ),
+                ),
               ),
             ),
     );
@@ -88,8 +97,14 @@ class _DraggablePieceState extends State<_DraggablePiece> {
 
     return Draggable<Piece>(
       data: p,
-      dragAnchorStrategy: pointerDragAnchorStrategy,
-      feedbackOffset: Offset(-w / 2, -h / 2),
+      // Vertical affinity: a drag starts instantly on vertical movement (the
+      // board sits above, so pieces are picked up by dragging upward), while a
+      // horizontal swipe falls through to the tray's scroll view — letting the
+      // player scroll to reach every piece without a pickup delay.
+      affinity: Axis.vertical,
+      // Default childDragAnchorStrategy keeps the feedback exactly where the
+      // player grabbed it — no jump on pickup, and the piece tracks the finger
+      // from its original position instead of snapping to be centred on it.
       feedback: Material(
         color: Colors.transparent,
         child: CustomPaint(
@@ -98,7 +113,10 @@ class _DraggablePieceState extends State<_DraggablePiece> {
         ),
       ),
       childWhenDragging: fadedWidget,
-      onDragStarted: () => setState(() => _isDragging = true),
+      onDragStarted: () {
+        SoundService.instance.playPickup();
+        setState(() => _isDragging = true);
+      },
       onDragEnd: (details) => setState(() => _isDragging = false),
       onDraggableCanceled: (velocity, offset) => setState(() => _isDragging = false),
       child: AnimatedOpacity(

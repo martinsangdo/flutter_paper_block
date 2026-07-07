@@ -67,7 +67,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           ),
         ),
         const Text(
-          'BLOCK',
+          'BLOCKS',
           style: TextStyle(
             fontSize: 52,
             fontWeight: FontWeight.w900,

@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="paper_block_game"
+        android:label="Paper Blocks"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
