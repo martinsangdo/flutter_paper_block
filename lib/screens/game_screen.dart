@@ -4,7 +4,7 @@ import '../data/levels.dart';
 import '../models/game_state.dart';
 import '../models/piece.dart';
 import '../services/sound_service.dart';
-import '../widgets/banner_ad_placeholder.dart';
+import '../widgets/banner_ad_widget.dart';
 import '../widgets/game_board_widget.dart';
 import '../widgets/hint_button.dart';
 import '../widgets/piece_tray_widget.dart';
@@ -130,7 +130,7 @@ class _GameScreenState extends State<GameScreen>
                   child: _buildBoardArea(cellSize),
                 ),
                 _buildTray(cellSize),
-                const BannerAdPlaceholder(),
+                const BannerAdWidget(),
               ],
             );
           },
@@ -173,7 +173,7 @@ class _GameScreenState extends State<GameScreen>
               ],
             ),
           ),
-          const HintButton(),
+          HintButton(gameState: _gameState),
           ListenableBuilder(
             listenable: _gameState,
             builder: (context, _) => IconButton(

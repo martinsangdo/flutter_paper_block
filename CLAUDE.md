@@ -40,7 +40,7 @@ lib/
 │   ├── piece.dart                # Piece / PieceCell models (relative cell offsets)
 │   └── game_state.dart           # ★ State management (ChangeNotifier): placement + validation
 ├── painters/
-│   ├── board_painter.dart        # CustomPainter for the board, target outline, ghost
+│   ├── board_painter.dart        # CustomPainter for the board, target outline, ghost, hint
 │   └── piece_painter.dart        # CustomPainter for individual pieces
 ├── screens/
 │   ├── splash_screen.dart        # White splash, centered logo, 2s → main menu
@@ -48,11 +48,13 @@ lib/
 │   ├── level_select_screen.dart  # Level grid with lock/unlock state
 │   └── game_screen.dart          # ★ Gameplay screen: header (hint/reset), board, tray, banner
 ├── services/
-│   └── sound_service.dart        # Persisted sound on/off + asset-free click/haptic feedback
+│   ├── sound_service.dart        # Persisted sound on/off + asset-free click/haptic feedback
+│   ├── ad_config.dart            # ★ AdMob unit IDs (Google test IDs; swap before release)
+│   └── ad_service.dart           # ★ AdMob SDK init + rewarded-ad load/show (ChangeNotifier)
 └── widgets/
-    ├── banner_ad_placeholder.dart # ★ Reserved adaptive-banner region (placeholder, no SDK)
+    ├── banner_ad_widget.dart     # ★ Anchored adaptive AdMob banner (bottom of game_screen)
     ├── game_board_widget.dart    # Board + drag-drop hit testing (pixel → grid col/row)
-    ├── hint_button.dart          # ★ Top-right Hint button (placeholder "coming soon")
+    ├── hint_button.dart          # ★ Top-right Hint button: rewarded ad (once/level) → full-solution reveal
     └── piece_tray_widget.dart    # Draggable tray of remaining pieces
 ```
 
@@ -121,33 +123,56 @@ When hand-authoring or editing a level, run `flutter test` — if it's unwinnabl
 solvability test will fail (rather than shipping a dead level that only surfaces at
 runtime).
 
-## Known placeholders → what to make them real
+## Ads (AdMob via `google_mobile_ads`)
 
-**No AdMob SDK is integrated** — the `google_mobile_ads` dependency was intentionally
-removed. Ads are represented by two isolated placeholder widgets so real AdMob code can be
-dropped in later without touching gameplay logic. There are no native AdMob app IDs in the
-Android/iOS manifests.
+AdMob is **integrated** (`google_mobile_ads` dependency). The SDK is initialized fire-and-
+forget in `main()` (`AdService.instance.initialize()`) so it never delays the first frame.
+Ads are **disabled on web / desktop** (`AdConfig.adsSupported`, gated on `kIsWeb` + platform).
 
-### 1. Banner — `lib/widgets/banner_ad_placeholder.dart`
+**⚠️ Test IDs — swap before release.** Every ad identifier currently uses Google's official
+*sample/test* IDs (safe to ship in dev; they never earn revenue and never risk a policy
+strike). Before release, replace **all three** places:
+1. Ad **unit** IDs in [lib/services/ad_config.dart](lib/services/ad_config.dart) (banner + rewarded, per platform).
+2. Android **app** ID: `com.google.android.gms.ads.APPLICATION_ID` meta-data in
+   [android/app/src/main/AndroidManifest.xml](android/app/src/main/AndroidManifest.xml).
+3. iOS **app** ID: `GADApplicationIdentifier` in [ios/Runner/Info.plist](ios/Runner/Info.plist).
 
-`BannerAdPlaceholder` reserves the bottom region for an **Anchored Adaptive Banner** (full
-device width; height = `heightFor(context)` ≈ 15% of screen height, clamped to the SDK's
-50–90 dp band). It draws a bordered `[Banner Ad Placeholder]` box of exactly that height so
-the layout won't shift when a real banner loads. It renders **nothing on web** (`kIsWeb`) —
-ads are disabled there.
+`google_mobile_ads 9.0.0` requires Android **minSdk 24** — already Flutter's default
+(`flutter.minSdkVersion`), so no Gradle change was needed.
 
-To go live: keep the widget's spot in `game_screen`'s column and swap the body of `build`
-for an `AdWidget(ad: bannerAd)` sized via `AdSize.getAnchoredAdaptiveBannerAdSize(...)`.
+### 1. Banner — `lib/widgets/banner_ad_widget.dart`
 
-### 2. Hint button — `lib/widgets/hint_button.dart`
+`BannerAdWidget` loads an **Anchored Adaptive Banner** at the bottom of `game_screen`'s
+column. It reserves a fixed-height box (`reservedHeight` ≈ 15% of screen height, clamped
+50–90 dp) while the ad loads or if it fails, so the gameplay layout never shifts, then
+swaps in the real `AdWidget` once loaded. Size comes from
+`AdSize.getLargeAnchoredAdaptiveBannerAdSizeWithOrientation(Orientation.portrait, width)`.
+Self-contained: `game_screen` just embeds `const BannerAdWidget()`.
 
-`HintButton` sits top-right in the game header and currently shows a "Hints are coming
-soon!" dialog — a **placeholder**, no rewarded-ad SDK. To make real: replace `_onPressed`
-with the rewarded-ad flow (show ad → on reward, reveal a hint, e.g. a backtracking solver
-highlighting a valid placement). Placement/styling stay unchanged.
+### 2. Rewarded hint — `lib/widgets/hint_button.dart` + `lib/services/ad_service.dart`
 
-Both widgets are self-contained — `game_screen` just embeds `const BannerAdPlaceholder()`
-and `const HintButton()`; no gameplay code references any ad SDK.
+Tapping the top-right `HintButton` reveals the **completed board**: a backtracking
+exact-cover solver (`GameState.solveHint`) computes a placement for *every* remaining
+piece, and `BoardPainter` draws the full solution as a preview overlay (each piece in
+its own color with a golden hint border). The overlay is cleared when the player places
+a piece or on reset; re-tap Hint to recompute it for the new state.
+
+The rewarded ad is charged **once per level**: the first Hint tap plays a **rewarded ad**
+(`AdService.showRewarded`) and, on reward, calls `GameState.markHintUnlocked()`, so every
+later Hint tap that level reveals instantly with no ad. `AdService` preloads the next
+rewarded ad after each show. The `hintUnlocked` flag lives on `GameState` (per level
+instance) and survives `reset()`.
+
+Graceful degradation, in priority order:
+- If the current board is **no longer solvable** (a legal-but-wrong placement is blocking),
+  `solveHint` returns null and the button shows an "undo/reset" dialog — **no ad is shown**.
+- If **no rewarded ad is ready** (offline / not yet loaded), the hint is granted anyway (and
+  marked unlocked) so gameplay is never blocked by ad availability.
+
+`GameState.solveHint` mirrors `canPlace` semantics exactly (fixed orientation, cells inside
+the target and unoccupied) and returns the full solution (`List<(Piece, int, int)>?`);
+[test/hint_solver_test.dart](test/hint_solver_test.dart) asserts that placing that solution
+completes every level.
 
 ## App identity
 
@@ -184,7 +209,5 @@ flutter build ios               # iOS (requires Xcode / macOS)
 ```
 
 - SDK: Dart `^3.11.0`, Flutter with Material 3. Portrait-only.
-- Key deps: `provider`, `shared_preferences`, `cupertino_icons`. (No ads SDK — see
-  placeholders below.)
-- The existing widget test just asserts the menu renders (`PLAY` button present); there
-  are no gameplay/level tests yet.
+- Key deps: `provider`, `shared_preferences`, `audioplayers`, `cupertino_icons`,
+  `google_mobile_ads` (see Ads section above).

@@ -1,8 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- AdMob (google_mobile_ads) requires network access. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <application
         android:label="Paper Blocks"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- AdMob app ID. TODO: replace this Google *test* app ID with the real
+             one from your AdMob console before release. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-8762959223087619~9693111042"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

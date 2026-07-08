@@ -96,6 +96,7 @@ class GameBoardWidgetState extends State<GameBoardWidget> {
               ghostCol: _ghostCol,
               ghostRow: _ghostRow,
               ghostValid: _ghostValid,
+              hintSolution: gs.hintSolution,
             ),
           ),
         ),

@@ -4,6 +4,17 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- AdMob app ID. TODO: replace this Google *test* app ID with the real one
+	     from your AdMob console before release. -->
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-8762959223087619~9693111042</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

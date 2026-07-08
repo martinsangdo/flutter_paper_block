@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import '../models/game_state.dart';
 import '../models/piece.dart';
@@ -13,10 +14,14 @@ class BoardPainter extends CustomPainter {
   final int ghostCol, ghostRow;
   final bool ghostValid;
 
+  // Full-solution hint overlay: each remaining piece with its solved origin.
+  final List<(Piece, int, int)> hintSolution;
+
   static const _bgColor = Color(0xFFFFFFFF);
   static const _gridColor = Color(0xFFB8D4F0);
   static const _sketchColor = Color(0xFF1A1A1A);
   static const _targetBg = Color(0xFFF8F8F8);
+  static const _hintColor = Color(0xFFFFC107);
 
   BoardPainter({
     required this.cols,
@@ -28,6 +33,7 @@ class BoardPainter extends CustomPainter {
     this.ghostCol = 0,
     this.ghostRow = 0,
     this.ghostValid = false,
+    this.hintSolution = const [],
   });
 
   @override
@@ -36,8 +42,31 @@ class BoardPainter extends CustomPainter {
     _drawGrid(canvas, size);
     _drawTargetCells(canvas);
     _drawPlacedPieces(canvas);
+    if (hintSolution.isNotEmpty) _drawHint(canvas);
     if (ghostPiece != null) _drawGhost(canvas);
     _drawTargetBorders(canvas);
+  }
+
+  /// Draws the full-solution preview: every remaining piece in its solved
+  /// position, in its own color with a golden hint border, so the board reads
+  /// as the completed picture. Cells already filled for real are skipped.
+  void _drawHint(Canvas canvas) {
+    final border = Paint()
+      ..color = _hintColor
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+    for (final (piece, col, row) in hintSolution) {
+      for (final cell in piece.absoluteCells(col, row)) {
+        if (placedCells.containsKey(cell)) continue; // already placed for real
+        final rect = _cellRect(cell.$1, cell.$2).deflate(1);
+        canvas.drawRect(
+          rect,
+          Paint()..color = piece.color.withValues(alpha: 0.45),
+        );
+        _drawHatching(canvas, rect, piece.darkColor.withValues(alpha: 0.4));
+        canvas.drawRect(rect, border);
+      }
+    }
   }
 
   void _drawBackground(Canvas canvas, Size size) {
@@ -221,6 +250,7 @@ class BoardPainter extends CustomPainter {
       old.ghostCol != ghostCol ||
       old.ghostRow != ghostRow ||
       old.ghostValid != ghostValid ||
+      !listEquals(old.hintSolution, hintSolution) ||
       old.cellSize != cellSize;
 }
 

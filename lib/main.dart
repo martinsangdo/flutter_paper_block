@@ -1,12 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'route_observer.dart';
 import 'screens/splash_screen.dart';
+import 'services/ad_service.dart';
 import 'services/sound_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SoundService.instance.load();
+  // Fire-and-forget: the Mobile Ads SDK initializes in the background so it
+  // never delays the splash/first frame. Ads simply appear once it's ready.
+  unawaited(AdService.instance.initialize());
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
